@@ -1,0 +1,30 @@
+# Ignore user-specific files
+*.user
+*.suo
+*.swp
+*.tmp
+*.temp
+*.log
+
+# Ignore Visual Studio folders and files
+.vs/
+**/.vs/
+**/*.user
+**/*.suo
+**/*.swp
+**/Properties/PublishProfiles/
+
+# Ignore build outputs
+bin/
+obj/
+**/bin/
+**/obj/
+
+# Ignore system files
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Ignore IDE/editor folders
+.idea/
+*.code-workspace
