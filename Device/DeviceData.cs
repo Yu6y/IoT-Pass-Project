@@ -1,4 +1,6 @@
-﻿using System;
+﻿using Microsoft.Azure.Devices.Client;
+using Opc.UaFx.Client;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -20,6 +22,7 @@ namespace Device
         {
 
         }
+
         public DeviceData(int productionStatus, string workerId, int productionRate, int goodCount, int badCount, double temperature, int deviceErrors)
         {
             ProductionStatus = productionStatus;

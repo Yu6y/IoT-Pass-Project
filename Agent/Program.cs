@@ -2,62 +2,77 @@
 using Device;
 using Opc.UaFx.Client;
 using Opc.UaFx;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+
 namespace Agent
 {
     internal class Program
     {
         static async Task Main(string[] args)
         {
-            using (var client = new OpcClient("opc.tcp://localhost:4840/"))
+            string deviceConnectionString = "";
+
+            using var opcClient = new OpcClient("opc.tcp://localhost:4840/");
+            using var deviceClient = DeviceClient.CreateFromConnectionString(deviceConnectionString);
+
+            try
             {
-                client.Connect();
-
-                OpcReadNode[] nodes = new OpcReadNode[]
-                {
-                    
-                    new OpcReadNode("ns=2;s=Device 1/ProductionStatus"),
-                    new OpcReadNode("ns=2;s=Device 1/ProductionRate"),
-                    new OpcReadNode("ns=2;s=Device 1/WorkorderId"),
-                    new OpcReadNode("ns=2;s=Device 1/Temperature"),
-                    new OpcReadNode("ns=2;s=Device 1/GoodCount"),
-                    new OpcReadNode("ns=2;s=Device 1/BadCount"),
-                    new OpcReadNode("ns=2;s=Device 1/DeviceError"),
-                };
-
-
-                IEnumerable<OpcValue> job = client.ReadNodes(nodes);
-
-                DeviceData data = new DeviceData();
-                data.ProductionStatus = (int)job.ToArray()[0].Value;
-                data.ProductionRate = (int)job.ToArray()[1].Value;
-                data.WorkerId = (string)job.ToArray()[2].Value;
-                data.Temperature = (double)job.ToArray()[3].Value;
-                data.GoodCount = (long)job.ToArray()[4].Value;
-                data.BadCount = (long)job.ToArray()[5].Value;
-                data.DeviceErrors = (int)job.ToArray()[6].Value;
-
-                #region azure
-                string deviceConnectionString = "";
-                using var deviceClient = DeviceClient.CreateFromConnectionString(deviceConnectionString);
+                opcClient.Connect();
                 await deviceClient.OpenAsync();
 
-                var device = new VirtualDevice(deviceClient);
-
+                var device = new VirtualDevice(deviceClient, opcClient);
                 await device.InitializeHandlers();
-                await device.UpdateTwinAsync();
-                Console.WriteLine("Connection Success!");
 
-                await device.SendMessages(data);
-                Console.WriteLine("Finished! Press Enter to close...");
-                Console.ReadLine();
-                #endregion
+                Console.WriteLine("Agent started. Press Ctrl+C to stop.\n");
 
-                //Console.WriteLine(node.Value);
+                while (true)
+                {
+                    try
+                    {
+                        OpcReadNode[] nodes = new OpcReadNode[]
+                        {
+                            new OpcReadNode("ns=2;s=Device 1/ProductionStatus"),
+                            new OpcReadNode("ns=2;s=Device 1/ProductionRate"),
+                            new OpcReadNode("ns=2;s=Device 1/WorkorderId"),
+                            new OpcReadNode("ns=2;s=Device 1/Temperature"),
+                            new OpcReadNode("ns=2;s=Device 1/GoodCount"),
+                            new OpcReadNode("ns=2;s=Device 1/BadCount"),
+                            new OpcReadNode("ns=2;s=Device 1/DeviceError"),
+                        };
+
+                        var values = opcClient.ReadNodes(nodes).ToArray();
+
+                        var data = new DeviceData
+                        {
+                            ProductionStatus = (int)values[0].Value,
+                            ProductionRate = (int)values[1].Value,
+                            WorkerId = (string)values[2].Value,
+                            Temperature = (double)values[3].Value,
+                            GoodCount = (long)values[4].Value,
+                            BadCount = (long)values[5].Value,
+                            DeviceErrors = (int)values[6].Value
+                        };
+
+                        await device.SendMessages(data);
+                        await device.UpdateTwinAsync(data);
+
+                        Console.WriteLine($"{DateTime.Now:HH:mm:ss} - Data sent.\n");
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[ERROR] OPC UA read/send failed: {ex.Message}");
+                    }
+
+                    await Task.Delay(TimeSpan.FromSeconds(5));
+                }
             }
-        
-            
-            
-           
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[FATAL] Startup failed: {ex.Message}");
+            }
         }
     }
 }

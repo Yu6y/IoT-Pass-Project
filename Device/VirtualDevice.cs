@@ -1,109 +1,125 @@
 ﻿using Microsoft.Azure.Devices.Client;
 using Microsoft.Azure.Devices.Shared;
 using Newtonsoft.Json;
+using Opc.UaFx;
+using Opc.UaFx.Client;
+using System;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace Device
 {
     public class VirtualDevice
     {
         private readonly DeviceClient client;
+        private readonly OpcClient opcClient;
 
-        public VirtualDevice(DeviceClient deviceClient)
+        public VirtualDevice(DeviceClient deviceClient, OpcClient opcClient)
         {
             this.client = deviceClient;
+            this.opcClient = opcClient;
         }
-
-        #region Sending Messages D2C
 
         public async Task SendMessages(DeviceData deviceData)
         {
-            var rnd = new Random();
-            Console.WriteLine($"Device sending data to IoT hub.. \n");
-
             var dataString = JsonConvert.SerializeObject(deviceData);
-            Message eventMessage = new Message(Encoding.UTF8.GetBytes(dataString));
-            eventMessage.ContentType = "application/json";
-            eventMessage.ContentEncoding = "utf-8";
-            eventMessage.Properties.Add("temperatureAlert", (deviceData.Temperature > 30 ? "true" : "false"));
+            var eventMessage = new Message(Encoding.UTF8.GetBytes(dataString))
+            {
+                ContentType = "application/json",
+                ContentEncoding = "utf-8"
+            };
 
-            Console.WriteLine($"\t {DateTime.Now.ToLocalTime()} > Sending message!");
+            eventMessage.Properties.Add("temperatureAlert", deviceData.Temperature > 30 ? "true" : "false");
 
+            Console.WriteLine($"{DateTime.Now:HH:mm:ss} > Sending message to IoT Hub...");
             await client.SendEventAsync(eventMessage);
         }
-        #endregion
 
-        #region Receiving Messages C2D
-
-        private async Task OnC2DMessageReceivedAsync(Message receivedMessage, object _)
+        public async Task UpdateTwinAsync(DeviceData deviceData)
         {
-            Console.WriteLine($"\t {DateTime.Now}> C2D message callback - message received with Id = {receivedMessage.MessageId}");
-            PrintMessage(receivedMessage);
-
-            await client.CompleteAsync(receivedMessage);
-            Console.WriteLine($"\t {DateTime.Now}> Completed C2D message received with Id = {receivedMessage.MessageId}");
-        }
-
-        private void PrintMessage(Message receivedMessage)
-        {
-            string messageData = Encoding.ASCII.GetString(receivedMessage.GetBytes());
-            Console.WriteLine($"\t\tReceived message: {messageData}");
-
-            int propCount = 0;
-            foreach (var prop in receivedMessage.Properties)
+            var reportedProperties = new TwinCollection
             {
-                Console.WriteLine($"\t\t Property [{propCount++}] > Key = {prop.Key} Value = {prop.Value}");
-            }
-        }
-        #endregion
+                ["DateTimeLastAppLaunch"] = DateTime.Now,
+                ["ProductionRate"] = deviceData.ProductionRate,
+                ["DeviceErrors"] = deviceData.DeviceErrors
+            };
 
-        #region direct methods
-
-        private async Task<MethodResponse> SendMessageHandler(MethodRequest methodRequest, object userContext)
-        {
-            Console.WriteLine($"\t METHOD EXECUTED: {methodRequest.Name}");
-            var payload = JsonConvert.DeserializeAnonymousType(methodRequest.DataAsJson, new DeviceData());
-            await SendMessages(payload);
-            return new MethodResponse(0);
-        }
-
-        private async Task<MethodResponse> DefaultServiceHandler(MethodRequest methodRequest, object userContext)
-        {
-            Console.WriteLine($"\t DEFAULT METHOD EXECUTED: {methodRequest.Name}");
-            await Task.Delay(1000);
-            return new MethodResponse(0);
-        }
-        #endregion
-
-        #region Device Twin
-
-        public async Task UpdateTwinAsync()
-        {
-            var twin = await client.GetTwinAsync();
-            Console.WriteLine($"\n Initial twin value received: \n {JsonConvert.SerializeObject(twin, Formatting.Indented)}");
-            Console.WriteLine();
-
-            var reportedProperties = new TwinCollection();
-            reportedProperties["DateTimeLastAppLaunch"] = DateTime.Now;
             await client.UpdateReportedPropertiesAsync(reportedProperties);
+            Console.WriteLine("Reported properties updated.");
         }
 
         private async Task OnDesiredPropertyChanged(TwinCollection desiredProperties, object userContext)
         {
-            Console.WriteLine($"\t Desired property change: \n\t {JsonConvert.SerializeObject(desiredProperties)}");
-            Console.WriteLine("\t Sending current time as reported property");
+            Console.WriteLine($"Desired property change: {JsonConvert.SerializeObject(desiredProperties)}");
 
-            TwinCollection reportedProperties = new TwinCollection();
-            reportedProperties["DateTimeLastDesiredPropertyChangeReceived"] = DateTime.Now;
+            var reportedProperties = new TwinCollection
+            {
+                ["DateTimeLastDesiredPropertyChangeReceived"] = DateTime.Now
+            };
+
+            if (desiredProperties.Contains("ProductionRate"))
+            {
+                int desiredRate = desiredProperties["ProductionRate"];
+                Console.WriteLine($"Setting ProductionRate to {desiredRate}");
+                opcClient.WriteNode("ns=2;s=Device 1/ProductionRate", desiredRate);
+                reportedProperties["ProductionRateApplied"] = desiredRate;
+            }
+
             await client.UpdateReportedPropertiesAsync(reportedProperties);
         }
-        #endregion
+
+        private async Task<MethodResponse> EmergencyStopHandler(MethodRequest methodRequest, object userContext)
+        {
+            Console.WriteLine(">>> Emergency Stop received from cloud!");
+
+            try
+            {
+                opcClient.WriteNode("ns=2;s=Device 1/EmergencyStop", true); 
+                return new MethodResponse(0);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[ERROR] EmergencyStopHandler: {ex.Message}");
+                return new MethodResponse(500);
+            }
+        }
+
+
+        private async Task<MethodResponse> ResetErrorStatusHandler(MethodRequest methodRequest, object userContext)
+        {
+            Console.WriteLine(">>> Reset Error Status received from cloud!");
+
+            try
+            {
+                opcClient.WriteNode("ns=2;s=Device 1/ResetErrorStatus", true);
+                return new MethodResponse(200);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[ERROR] ResetErrorStatusHandler: {ex.Message}");
+                return new MethodResponse(500);
+            }
+        }
+
+
+        private async Task<MethodResponse> DefaultServiceHandler(MethodRequest methodRequest, object userContext)
+        {
+            Console.WriteLine($"Default method executed: {methodRequest.Name}");
+            return new MethodResponse(404);
+        }
+
+        private async Task OnC2DMessageReceivedAsync(Message receivedMessage, object _)
+        {
+            string messageData = Encoding.ASCII.GetString(receivedMessage.GetBytes());
+            Console.WriteLine($"Received C2D message: {messageData}");
+            await client.CompleteAsync(receivedMessage);
+        }
 
         public async Task InitializeHandlers()
         {
             await client.SetReceiveMessageHandlerAsync(OnC2DMessageReceivedAsync, client);
-
-            await client.SetMethodHandlerAsync("SendMessages", SendMessageHandler, client);
+            await client.SetMethodHandlerAsync("EmergencyStop", EmergencyStopHandler, client);
+            await client.SetMethodHandlerAsync("ResetErrorStatus", ResetErrorStatusHandler, client);
             await client.SetMethodDefaultHandlerAsync(DefaultServiceHandler, client);
             await client.SetDesiredPropertyUpdateCallbackAsync(OnDesiredPropertyChanged, client);
         }
