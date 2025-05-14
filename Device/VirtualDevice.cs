@@ -71,16 +71,16 @@ namespace Device
         private async Task<MethodResponse> EmergencyStopHandler(MethodRequest methodRequest, object userContext)
         {
             Console.WriteLine(">>> Emergency Stop received from cloud!");
-
+            var payload = JsonConvert.DeserializeAnonymousType(methodRequest.DataAsJson, new { machine = default(string) });
             try
             {
-                opcClient.CallMethod("ns=2;s=Device 1", "ns=2;s=Device 1/EmergencyStop");
+                opcClient.CallMethod($"ns=2;s={payload.machine}", $"ns=2;s={payload.machine}/EmergencyStop");
                 return new MethodResponse(0);
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"[ERROR] EmergencyStopHandler: {ex.Message}");
-                return new MethodResponse(500);
+                return new MethodResponse(1);
             }
         }
 
@@ -88,16 +88,16 @@ namespace Device
         private async Task<MethodResponse> ResetErrorStatusHandler(MethodRequest methodRequest, object userContext)
         {
             Console.WriteLine(">>> Reset Error Status received from cloud!");
-
+            var payload = JsonConvert.DeserializeAnonymousType(methodRequest.DataAsJson, new { machine = default(string) });
             try
             {
-                opcClient.CallMethod("ns=2;s=Device 1", "ns=2;s=Device 1/EmergencyStop");
-                return new MethodResponse(200);
+                opcClient.CallMethod($"ns=2;s={payload.machine}", $"ns=2;s={payload.machine}/EmergencyStop");
+                return new MethodResponse(0);
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"[ERROR] ResetErrorStatusHandler: {ex.Message}");
-                return new MethodResponse(500);
+                return new MethodResponse(1);
             }
         }
 
@@ -105,7 +105,7 @@ namespace Device
         private async Task<MethodResponse> DefaultServiceHandler(MethodRequest methodRequest, object userContext)
         {
             Console.WriteLine($"Default method executed: {methodRequest.Name}");
-            return new MethodResponse(404);
+            return new MethodResponse(0);
         }
 
         private async Task OnC2DMessageReceivedAsync(Message receivedMessage, object _)
