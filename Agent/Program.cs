@@ -13,7 +13,7 @@ namespace Agent
     {
         static async Task Main(string[] args)
         {
-            string deviceConnectionString = "";
+            string deviceConnectionString = "HostName=IoTZajecia.azure-devices.net;DeviceId=test_device;SharedAccessKey=g/tfP0og9Qm3vGzht2vGFEA1T7volalBQBXPickK9SU=";
 
             using var opcClient = new OpcClient("opc.tcp://localhost:4840/");
             using var deviceClient = DeviceClient.CreateFromConnectionString(deviceConnectionString);

@@ -74,7 +74,7 @@ namespace Device
 
             try
             {
-                opcClient.WriteNode("ns=2;s=Device 1/EmergencyStop", true); 
+                opcClient.CallMethod("ns=2;s=Device 1", "ns=2;s=Device 1/EmergencyStop");
                 return new MethodResponse(0);
             }
             catch (Exception ex)
@@ -91,7 +91,7 @@ namespace Device
 
             try
             {
-                opcClient.WriteNode("ns=2;s=Device 1/ResetErrorStatus", true);
+                opcClient.CallMethod("ns=2;s=Device 1", "ns=2;s=Device 1/EmergencyStop");
                 return new MethodResponse(200);
             }
             catch (Exception ex)
