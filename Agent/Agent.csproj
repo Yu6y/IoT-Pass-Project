@@ -20,4 +20,10 @@
     <ProjectReference Include="..\Device\Device.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="application-properties.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

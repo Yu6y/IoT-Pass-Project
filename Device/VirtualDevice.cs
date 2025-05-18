@@ -1,11 +1,9 @@
 ﻿using Microsoft.Azure.Devices.Client;
 using Microsoft.Azure.Devices.Shared;
 using Newtonsoft.Json;
-using Opc.UaFx;
 using Opc.UaFx.Client;
-using System;
 using System.Text;
-using System.Threading.Tasks;
+using System.Text.Json;
 
 namespace Device
 {
@@ -20,8 +18,9 @@ namespace Device
             this.opcClient = opcClient;
         }
 
-        public async Task SendMessages(DeviceData deviceData)
+        public async Task SendMessages(DeviceData deviceData, string deviceId)
         {
+            Console.WriteLine(deviceId);
             var dataString = JsonConvert.SerializeObject(deviceData);
             var eventMessage = new Message(Encoding.UTF8.GetBytes(dataString))
             {
@@ -35,13 +34,14 @@ namespace Device
             await client.SendEventAsync(eventMessage);
         }
 
-        public async Task UpdateTwinAsync(DeviceData deviceData)
+        public async Task UpdateTwinAsync(DeviceData deviceData, string deviceId)
         {
-            var reportedProperties = new TwinCollection
+            var reportedProperties = new TwinCollection();
+            reportedProperties[deviceId.Replace(' ', '/')] = new
             {
-                ["DateTimeLastAppLaunch"] = DateTime.Now,
-                ["ProductionRate"] = deviceData.ProductionRate,
-                ["DeviceErrors"] = deviceData.DeviceErrors
+                DateTimeLastAppLaunch = DateTime.Now,
+                deviceData.ProductionRate,
+                deviceData.DeviceErrors
             };
 
             await client.UpdateReportedPropertiesAsync(reportedProperties);
@@ -50,22 +50,34 @@ namespace Device
 
         private async Task OnDesiredPropertyChanged(TwinCollection desiredProperties, object userContext)
         {
-            Console.WriteLine($"Desired property change: {JsonConvert.SerializeObject(desiredProperties)}");
+            //Console.WriteLine($"Desired property change: {JsonConvert.SerializeObject(desiredProperties)}");
 
-            var reportedProperties = new TwinCollection
-            {
-                ["DateTimeLastDesiredPropertyChangeReceived"] = DateTime.Now
-            };
+            var reportedProperties = new TwinCollection();
+            var properties = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(desiredProperties.ToJson());
 
-            if (desiredProperties.Contains("ProductionRate"))
+            foreach(var row in properties)
             {
-                int desiredRate = desiredProperties["ProductionRate"];
-                Console.WriteLine($"Setting ProductionRate to {desiredRate}");
-                opcClient.WriteNode("ns=2;s=Device 1/ProductionRate", desiredRate);
-                reportedProperties["ProductionRateApplied"] = desiredRate;
+                if (row.Key.StartsWith("Device"))
+                {
+                    string deviceId = row.Key;
+                    JsonElement deviceData = row.Value;
+                    
+                    if (deviceData.TryGetProperty("ProductionRate", out JsonElement productionRate))
+                    {
+                        int desiredRate = productionRate.GetInt32();
+
+                        Console.WriteLine($"Setting ProductionRate to {desiredRate}");
+                        opcClient.WriteNode($"ns=2;s={deviceId.Replace('/', ' ')}/ProductionRate", desiredRate);
+
+                        reportedProperties[deviceId] = new
+                        {
+                            DateTimeLastDesiredPropertyChangeReceived = DateTime.Now
+                        };
+
+                        await client.UpdateReportedPropertiesAsync(reportedProperties);
+                    }
+                }
             }
-
-            await client.UpdateReportedPropertiesAsync(reportedProperties);
         }
 
         private async Task<MethodResponse> EmergencyStopHandler(MethodRequest methodRequest, object userContext)
@@ -91,7 +103,7 @@ namespace Device
             var payload = JsonConvert.DeserializeAnonymousType(methodRequest.DataAsJson, new { machine = default(string) });
             try
             {
-                opcClient.CallMethod($"ns=2;s={payload.machine}", $"ns=2;s={payload.machine}/EmergencyStop");
+                opcClient.CallMethod($"ns=2;s={payload.machine}", $"ns=2;s={payload.machine}/ResetErrorStatus");
                 return new MethodResponse(0);
             }
             catch (Exception ex)

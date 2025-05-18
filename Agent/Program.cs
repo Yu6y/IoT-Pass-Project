@@ -1,12 +1,8 @@
-﻿// Program.cs
-using Microsoft.Azure.Devices.Client;
+﻿using Microsoft.Azure.Devices.Client;
 using Device;
 using Opc.UaFx.Client;
 using Opc.UaFx;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+using System.Text.Json;
 
 namespace Agent
 {
@@ -14,9 +10,14 @@ namespace Agent
     {
         static async Task Main(string[] args)
         {
-            string deviceConnectionString = "";
+            string prop = File.ReadAllText("application-properties.json");
+            Configuration connectionString = JsonSerializer.Deserialize<Configuration>(prop);
+
+            if (string.IsNullOrEmpty(connectionString.DeviceConnectionString))
+                return;
+
             using var opcClient = new OpcClient("opc.tcp://localhost:4840/");
-            using var deviceClient = DeviceClient.CreateFromConnectionString(deviceConnectionString);
+            using var deviceClient = DeviceClient.CreateFromConnectionString(connectionString.DeviceConnectionString);
 
             try
             {
@@ -38,16 +39,16 @@ namespace Agent
                         {
                             try
                             {
-                                Console.WriteLine(childNode.DisplayName.Value);
+                                string deviceId = childNode.DisplayName.Value;
                                 OpcReadNode[] nodes = new OpcReadNode[]
                                 {
-                                new OpcReadNode($"ns=2;s={childNode.DisplayName.Value}/ProductionStatus"),
-                                new OpcReadNode($"ns=2;s={childNode.DisplayName.Value}/ProductionRate"),
-                                new OpcReadNode($"ns=2;s={childNode.DisplayName.Value}/WorkorderId"),
-                                new OpcReadNode($"ns=2;s={childNode.DisplayName.Value}/Temperature"),
-                                new OpcReadNode($"ns=2;s={childNode.DisplayName.Value}/GoodCount"),
-                                new OpcReadNode($"ns=2;s={childNode.DisplayName.Value}/BadCount"),
-                                new OpcReadNode($"ns=2;s={childNode.DisplayName.Value}/DeviceError"),
+                                    new OpcReadNode($"ns=2;s={deviceId}/ProductionStatus"),
+                                    new OpcReadNode($"ns=2;s={deviceId}/ProductionRate"),
+                                    new OpcReadNode($"ns=2;s={deviceId}/WorkorderId"),
+                                    new OpcReadNode($"ns=2;s={deviceId}/Temperature"),
+                                    new OpcReadNode($"ns=2;s={deviceId}/GoodCount"),
+                                    new OpcReadNode($"ns=2;s={deviceId}/BadCount"),
+                                    new OpcReadNode($"ns=2;s={deviceId}/DeviceError"),
                                 };
 
                                 var values = opcClient.ReadNodes(nodes).ToArray();
@@ -63,8 +64,8 @@ namespace Agent
                                     DeviceErrors = (int)values[6].Value
                                 };
 
-                                await device.SendMessages(data);
-                                await device.UpdateTwinAsync(data);
+                                await device.SendMessages(data, deviceId);
+                                await device.UpdateTwinAsync(data, deviceId);
 
                                 Console.WriteLine($"{DateTime.Now:HH:mm:ss} - Device {childNode.NodeId.ToString()} data sent.\n");
                             }
@@ -82,6 +83,11 @@ namespace Agent
             {
                 Console.WriteLine($"[FATAL] Startup failed: {ex.Message}");
             }
+        }
+
+        internal class Configuration
+        {
+            public string DeviceConnectionString { get; set; }
         }
     }
 }
