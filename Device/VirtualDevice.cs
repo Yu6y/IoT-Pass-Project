@@ -28,8 +28,6 @@ namespace Device
                 ContentEncoding = "utf-8"
             };            
 
-            eventMessage.Properties.Add("temperatureAlert", deviceData.Temperature > 30 ? "true" : "false"); //
-
             Console.WriteLine($"{DateTime.Now:HH:mm:ss} > Sending message to IoT Hub...");
             await client.SendEventAsync(eventMessage);
         }
@@ -82,8 +80,6 @@ namespace Device
 
         private async Task OnDesiredPropertyChanged(TwinCollection desiredProperties, object userContext)
         {
-            //Console.WriteLine($"Desired property change: {JsonConvert.SerializeObject(desiredProperties)}");
-
             var reportedProperties = new TwinCollection();
             var properties = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(desiredProperties.ToJson());
 

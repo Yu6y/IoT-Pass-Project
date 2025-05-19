@@ -6,6 +6,8 @@ namespace Device
     public class DeviceData
     {
         [JsonProperty]
+        public string DeviceId { get; set; }
+        [JsonProperty]
         public int ProductionStatus { get; set; }
         [JsonProperty]
         public string WorkerId { get; set; }        
@@ -23,8 +25,9 @@ namespace Device
 
         }
 
-        public DeviceData(int productionStatus, string workerId, int productionRate, int goodCount, int badCount, double temperature, int deviceErrors)
+        public DeviceData(string deviceId, int productionStatus, string workerId, int productionRate, int goodCount, int badCount, double temperature, int deviceErrors)
         {
+            DeviceId = deviceId;
             ProductionStatus = productionStatus;
             WorkerId = workerId;
             ProductionRate = productionRate;

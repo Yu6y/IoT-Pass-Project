@@ -57,6 +57,7 @@ namespace Agent
 
                                var data = new DeviceData
                                {
+                                   DeviceId = deviceId,
                                    ProductionStatus = (int)values[0].Value,
                                    ProductionRate = (int)values[1].Value,
                                    WorkerId = (string)values[2].Value,
