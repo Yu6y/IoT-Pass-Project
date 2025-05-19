@@ -26,9 +26,41 @@ namespace Device
             {
                 ContentType = "application/json",
                 ContentEncoding = "utf-8"
-            };
+            };            
 
-            eventMessage.Properties.Add("temperatureAlert", deviceData.Temperature > 30 ? "true" : "false");
+            eventMessage.Properties.Add("temperatureAlert", deviceData.Temperature > 30 ? "true" : "false"); //
+
+            Console.WriteLine($"{DateTime.Now:HH:mm:ss} > Sending message to IoT Hub...");
+            await client.SendEventAsync(eventMessage);
+        }
+
+        public async Task SendDeviceErrorMessage(int value, string deviceId)
+        {
+            Console.WriteLine($"An error occured on {deviceId}!");
+            string flag = Convert.ToString(value, 2).PadLeft(4, '0');
+            Dictionary<string, object> message = new Dictionary<string, object>();
+            List<string> errors = new List<string>();
+
+            if (flag[3] == '1')
+                errors.Add("Emergency Stop");
+            if (flag[2] == '1')
+                errors.Add("Power Failure");
+            if (flag[1] == '1')
+                errors.Add("Sensor Failure");
+            if (flag[0] == '1')
+                errors.Add("Unknown");
+
+            message.Add("DeviceId", deviceId);
+            message.Add("Errors", errors);
+            message.Add("Value", value);
+            message.Add("Timestamp", DateTime.Now);
+
+            var dataString = JsonConvert.SerializeObject(message);
+            var eventMessage = new Message(Encoding.UTF8.GetBytes(dataString))
+            {
+                ContentType = "application/json",
+                ContentEncoding = "utf-8"
+            };
 
             Console.WriteLine($"{DateTime.Now:HH:mm:ss} > Sending message to IoT Hub...");
             await client.SendEventAsync(eventMessage);
