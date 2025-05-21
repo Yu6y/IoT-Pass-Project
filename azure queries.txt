@@ -3,7 +3,7 @@ select
 System.Timestamp() as windowEndTime,
 round((cast(sum(GoodCount) as float) / (sum(GoodCount) + sum(BadCount))), 2) * 100 as productionkpis,
 DeviceId
-into [productionkpis]
+into [Production-KPIs]
 from iot timestamp by IoTHub.EnqueuedTime
 where BadCount > 0 and GoodCount > 0
 group by
@@ -17,7 +17,7 @@ max(Temperature) as maxTemperature,
 min(Temperature) as minTemperature,
 avg(Temperature) as avgTemperature,
 DeviceId
-into [temps]
+into [temperatures-Storage]
 from iot timestamp by IoTHub.EnqueuedTime
 group by DeviceId,
 HoppingWindow(minute, 5, 1);
@@ -32,3 +32,4 @@ group by
 Body.DeviceId,
 TumblingWindow(minute, 1)
 having count(*) > 3
+

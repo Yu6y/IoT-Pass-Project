@@ -3,12 +3,12 @@ using Device;
 using Opc.UaFx.Client;
 using Opc.UaFx;
 using System.Text.Json;
-using Org.BouncyCastle.Security;
 
 namespace Agent
 {
     internal class Program
     {
+        private static readonly object _lock = new object();
         static async Task Main(string[] args)
         {
             string prop = File.ReadAllText("application-properties.json");
@@ -17,7 +17,7 @@ namespace Agent
             if (string.IsNullOrEmpty(connectionString.DeviceConnectionString))
                 return;
 
-            using var opcClient = new OpcClient("opc.tcp://localhost:4840/");
+            using var opcClient = new OpcClient(connectionString.OpcServer);
             using var deviceClient = DeviceClient.CreateFromConnectionString(connectionString.DeviceConnectionString);
             
             try
@@ -27,6 +27,7 @@ namespace Agent
 
                 var device = new VirtualDevice(deviceClient, opcClient);
                 Dictionary<string, int> prevErrors = new Dictionary<string, int>();
+                
                 await device.InitializeHandlers();
 
                 Console.WriteLine("Agent started. Press Ctrl+C to stop.\n");
@@ -65,11 +66,10 @@ namespace Agent
                                    GoodCount = (long)values[4].Value,
                                    BadCount = (long)values[5].Value,
                                    DeviceErrors = (int)values[6].Value
-                               };                                       
-                                   
-                               await device.SendMessages(data, deviceId);
-                               await device.UpdateTwinAsync(data, deviceId);
-
+                               }; 
+                                
+                                    await device.SendMessages(data, deviceId);
+                                    await device.UpdateTwinAsync(data, deviceId);
                                if (!prevErrors.TryGetValue(deviceId, out int previous) || previous != data.DeviceErrors)
                                {
                                    if (data.DeviceErrors > 0)
@@ -103,6 +103,7 @@ namespace Agent
         internal class Configuration
         {
             public string DeviceConnectionString { get; set; }
+            public string OpcServer { get; set; }
         }
     }
 }
