@@ -33,3 +33,38 @@ Body.DeviceId,
 TumblingWindow(minute, 1)
 having count(*) > 3
 
+-- queries for functions
+
+-- 1 EmergencyStop
+select SystemProperties.connectionDeviceId AS DeviceId, 
+Body.DeviceId AS TargetMachine
+into [EmergencyStopFunction]
+from [route-errors] timestamp by Body.Timestamp
+group by
+Body.DeviceId,
+SystemProperties.connectionDeviceId,
+TumblingWindow(minute, 1)
+having COUNT(*) > 3
+
+-- 2 ProductionRate
+select 
+round((cast(sum(GoodCount) as float) / (sum(GoodCount) + sum(BadCount))), 2) * 100 as productionKpis,
+DeviceId as TargetMachine,
+IoTHub.ConnectionDeviceId as DeviceId
+into [UpdateProductionRateFunction]
+from iot timestamp by IoTHub.EnqueuedTime
+where BadCount > 0 and GoodCount > 0
+group by
+IoTHub.ConnectionDeviceId,
+DeviceId,
+TumblingWindow(minute, 5)
+
+-- 3 SendMail
+select SystemProperties.connectionDeviceId AS DeviceId,
+Body.Errors AS ErrorList,
+Body.Timestamp
+into [SendEmailProxy]
+from [route-errors] timestamp by Body.Timestamp
+where Body.Errors IS NOT NULL 
+
+
