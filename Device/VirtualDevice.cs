@@ -60,7 +60,7 @@ namespace Device
                 ContentEncoding = "utf-8"
             };
 
-            Console.WriteLine($"{DateTime.Now:HH:mm:ss} > Sending message to IoT Hub...");
+            Console.WriteLine($"{DateTime.Now:HH:mm:ss} > Sending error message to IoT Hub...");
             await client.SendEventAsync(eventMessage);
         }
 

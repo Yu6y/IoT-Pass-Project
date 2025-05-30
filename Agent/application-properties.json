@@ -1,4 +1,4 @@
 {
   "DeviceConnectionString": "CONNECTION_STRING",
-  "OpcServer": "OPCSERVERCONNECTION"
+  "OpcServer": "OPCSERVER"
 }
